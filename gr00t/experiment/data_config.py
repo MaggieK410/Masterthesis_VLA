@@ -95,11 +95,13 @@ class FourierGr1ArmsOnlyDataConfig(BaseDataConfig):
         return modality_configs
 
     def transform(self) -> ModalityTransform:
+        print("Normalization of states: ", self.action_keys)
+
         transforms = [
             # video transforms
             VideoToTensor(apply_to=self.video_keys),
             VideoCrop(apply_to=self.video_keys, scale=0.95),
-            VideoResize(apply_to=self.video_keys, height=224, width=224, interpolation="linear"),
+            VideoResize(apply_to=self.video_keys, height=256, width=256, interpolation="linear"), #original: 224
             VideoColorJitter(
                 apply_to=self.video_keys,
                 brightness=0.3,

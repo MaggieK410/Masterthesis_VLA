@@ -156,6 +156,7 @@ class LeRobotSingleDataset(Dataset):
         self._data_path_pattern = self._get_data_path_pattern()
         self._video_path_pattern = self._get_video_path_pattern()
         self._chunk_size = self._get_chunk_size()
+        print("Chunk size: ", self._chunk_size )
         self._tasks = self._get_tasks()
         self.curr_traj_data = None
         self.curr_traj_id = None

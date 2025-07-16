@@ -12,6 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+
+#print("TRYING TO IMPORT IN SIMULATION")
+#import gr00t.eval.register_my_lift_env #I added this
+#print("IMPORT IN SIMULATION DONE")
 import time
 from dataclasses import dataclass, field
 from functools import partial
@@ -19,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import gymnasium as gym
+#print(gym.envs.registry.keys())
 import numpy as np
 
 # Required for robocasa environments
@@ -33,6 +39,7 @@ from gr00t.eval.wrappers.video_recording_wrapper import (
     VideoRecorder,
     VideoRecordingWrapper,
 )
+
 from gr00t.model.policy import BasePolicy
 
 # from gymnasium.envs.registration import registry
@@ -134,6 +141,11 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
         while completed_episodes < config.n_episodes:
             # Process observations and get actions from the server
             actions = self._get_actions_from_server(obs)
+
+            ##A little bit hacky: 
+            #print("Actions: ", actions["action.left_arm"].shape)
+            actions["action.waist"]=np.zeros((1, 16, 3)) #maybe should not be zeros, maybe should be previous positions?
+
             # Step the environment
             next_obs, rewards, terminations, truncations, env_infos = self.env.step(actions)
             # Update episode tracking

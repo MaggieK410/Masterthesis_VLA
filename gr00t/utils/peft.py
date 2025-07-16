@@ -26,7 +26,7 @@ def get_lora_model(model, rank=32, lora_alpha=16, lora_dropout=0.1, action_head_
         if isinstance(module, torch.nn.Linear):
             if any(x in name for x in ["q_proj", "v_proj", "to_q", "to_v", "k_proj", "to_k"]):
                 target_modules.append(name)
-
+    print("Target modules Lora: ", target_modules)
     lora_config = LoraConfig(
         r=rank,
         lora_alpha=lora_alpha,

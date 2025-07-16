@@ -59,6 +59,8 @@ def calc_mse_for_single_trajectory(
         concat_state = np.concatenate(
             [data_point[f"state.{key}"][0] for key in modality_keys], axis=0
         )
+        
+
         concat_gt_action = np.concatenate(
             [data_point[f"action.{key}"][0] for key in modality_keys], axis=0
         )
@@ -68,6 +70,7 @@ def calc_mse_for_single_trajectory(
 
         if step_count % action_horizon == 0:
             print("inferencing at step: ", step_count)
+            print("Current state: ", concat_state)
             action_chunk = policy.get_action(data_point)
             for j in range(action_horizon):
                 # NOTE: concat_pred_action = action[f"action.{modality_keys[0]}"][j]

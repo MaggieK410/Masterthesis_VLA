@@ -83,7 +83,7 @@ class ArgsConfig:
     learning_rate: float = 1e-4
     """Learning rate for training."""
 
-    weight_decay: float = 1e-5
+    weight_decay: float = 1e-7 #original: 1e-6
     """Weight decay for AdamW optimizer."""
 
     warmup_ratio: float = 0.05
@@ -204,8 +204,8 @@ def main(config: ArgsConfig):
         output_dir=config.output_dir,
         run_name=None,
         remove_unused_columns=False,
-        deepspeed="",
-        gradient_checkpointing=False,
+        deepspeed="", #added deepspeed
+        gradient_checkpointing=True,
         bf16=True,
         tf32=True,
         per_device_train_batch_size=config.batch_size,

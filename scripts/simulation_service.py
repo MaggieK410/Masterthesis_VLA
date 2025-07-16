@@ -18,6 +18,10 @@ import argparse
 import numpy as np
 
 from gr00t.eval.robot import RobotInferenceServer
+#print("TRY TO IMPORT")
+#import gr00t.eval.register_my_lift_env
+#print("IMPORT DONE")
+
 from gr00t.eval.simulation import (
     MultiStepConfig,
     SimulationConfig,
