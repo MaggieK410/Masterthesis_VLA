@@ -143,7 +143,7 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
             actions = self._get_actions_from_server(obs)
 
             ##A little bit hacky: 
-            #print("Actions: ", actions["action.left_arm"].shape)
+            print("Actions: ", actions["action.left_arm"].shape)
             actions["action.waist"]=np.zeros((1, 16, 3)) #maybe should not be zeros, maybe should be previous positions?
 
             # Step the environment
