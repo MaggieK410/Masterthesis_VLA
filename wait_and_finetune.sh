@@ -1,16 +1,17 @@
 #!/bin/bash
 
 # === Config ===
-REQUIRED_FREE_MEM_MB=24441   # Adjust if needed
+REQUIRED_FREE_MEM_MB=24200   # GPU0 has max 24243 and GPU1 24441
 GPU_IDS=(0 1)
 CHECK_INTERVAL=30            # seconds
 CMD="CUDA_VISIBLE_DEVICES=0,1 accelerate launch scripts/finetune_accelerate.py \
-  --output_dir ./finetuned-model_trained_20000_pick_up_ball_larger_dataset \
+  --output_dir ../trained_models/finetuned-model_trained_20000_pick_up_ball_medium_larger_dataset \
   --batch_size 1 \
-  --dataset_path ./finetune_data_pick_up_ball_small_larger_dataset/ \
+  --dataset_path ../datasets/finetune_data_pick_up_ball_medium_larger_dataset/ \
   --embodiment_tag gr1 \
   --max_steps 20000 \
-  --tune_visual"
+  --tune_visual" \
+  --resume
 
 # === Function to check if all specified GPUs are free enough ===
 check_gpus_free() {

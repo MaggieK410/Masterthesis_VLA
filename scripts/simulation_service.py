@@ -63,7 +63,7 @@ if __name__ == "__main__":
         "--n_action_steps",
         type=int,
         help="Number of action steps per environment step.",
-        default=16,
+        default=16, #actually 16
     )
     parser.add_argument(
         "--max_episode_steps", type=int, help="Maximum number of steps per episode.", default=1440
@@ -72,6 +72,8 @@ if __name__ == "__main__":
     parser.add_argument("--server", action="store_true", help="Run the server.")
     # client mode
     parser.add_argument("--client", action="store_true", help="Run the client")
+
+    parser.add_argument("--save_hl_and_attentions", action="store_true", help="Save the attention layer outputs and the hidden layers within a simulation")
     args = parser.parse_args()
 
     if args.server:
@@ -106,7 +108,11 @@ if __name__ == "__main__":
 
         # Run the simulation
         print(f"Running simulation for {args.env_name}...")
-        env_name, episode_successes = simulation_client.run_simulation(config)
+        if args.save_hl_and_attentions == False:
+            env_name, episode_successes = simulation_client.run_simulation(config)
+        elif args.save_hl_and_attentions == True:
+            output_dir=args.video_dir + "outputs_episode_" #this is not really smart, it only works for one single episode at a time
+            env_name, episode_successes = simulation_client.run_simulation(config, output_dir=output_dir)
 
         # Print results
         print(f"Results for {env_name}:")

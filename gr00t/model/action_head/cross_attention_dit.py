@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from typing import Optional
+import os
 
 import torch
 import torch.nn.functional as F
@@ -88,6 +89,7 @@ class BasicTransformerBlock(nn.Module):
         ff_inner_dim: Optional[int] = None,
         ff_bias: bool = True,
         attention_out_bias: bool = True,
+        return_attention=False
     ):
         super().__init__()
         self.dim = dim
@@ -101,6 +103,7 @@ class BasicTransformerBlock(nn.Module):
         self.positional_embeddings = positional_embeddings
         self.num_positional_embeddings = num_positional_embeddings
         self.norm_type = norm_type
+        self.return_attention=return_attention
 
         if positional_embeddings and (num_positional_embeddings is None):
             raise ValueError(
@@ -120,7 +123,7 @@ class BasicTransformerBlock(nn.Module):
             self.norm1 = AdaLayerNorm(dim)
         else:
             self.norm1 = nn.LayerNorm(dim, elementwise_affine=norm_elementwise_affine, eps=norm_eps)
-
+        
         self.attn1 = Attention(
             query_dim=dim,
             heads=num_attention_heads,
@@ -154,6 +157,7 @@ class BasicTransformerBlock(nn.Module):
         encoder_hidden_states: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
         temb: Optional[torch.LongTensor] = None,
+        return_attention=False
     ) -> torch.Tensor:
 
         # 0. Self-Attention
@@ -165,12 +169,23 @@ class BasicTransformerBlock(nn.Module):
         if self.pos_embed is not None:
             norm_hidden_states = self.pos_embed(norm_hidden_states)
 
-        attn_output = self.attn1(
-            norm_hidden_states,
-            encoder_hidden_states=encoder_hidden_states,
-            attention_mask=attention_mask,
-            # encoder_attention_mask=encoder_attention_mask,
-        )
+        if return_attention == True:
+            attn_output, attention_probs = self.attn1(
+                norm_hidden_states,
+                encoder_hidden_states=encoder_hidden_states,
+                attention_mask=attention_mask,
+                pass_attention_probs=True
+            )
+            #print("Attention probs shape: ", attention_probs.shape)
+        else:
+            attn_output = self.attn1(
+                norm_hidden_states,
+                encoder_hidden_states=encoder_hidden_states,
+                attention_mask=attention_mask,
+                pass_attention_probs=False
+                # encoder_attention_mask=encoder_attention_mask,
+            )
+
         if self.final_dropout:
             attn_output = self.final_dropout(attn_output)
 
@@ -185,7 +200,12 @@ class BasicTransformerBlock(nn.Module):
         hidden_states = ff_output + hidden_states
         if hidden_states.ndim == 4:
             hidden_states = hidden_states.squeeze(1)
-        return hidden_states
+        
+        #I changed!!
+        if return_attention==False:
+            return hidden_states
+        elif return_attention==True:
+            return hidden_states, attention_probs
 
 
 class DiT(ModelMixin, ConfigMixin):
@@ -212,6 +232,7 @@ class DiT(ModelMixin, ConfigMixin):
         positional_embeddings: Optional[str] = "sinusoidal",
         interleave_self_attention=False,
         cross_attention_dim: Optional[int] = None,
+
     ):
         super().__init__()
 
@@ -266,6 +287,7 @@ class DiT(ModelMixin, ConfigMixin):
         timestep: Optional[torch.LongTensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
         return_all_hidden_states: bool = False,
+        output_dir =None
     ):
         # Encode timesteps
         temb = self.timestep_encoder(timestep)
@@ -275,31 +297,71 @@ class DiT(ModelMixin, ConfigMixin):
         encoder_hidden_states = encoder_hidden_states.contiguous()
 
         all_hidden_states = [hidden_states]
+        
+        #I added!
+        all_attention_maps=[]
 
         # Process through transformer blocks
         for idx, block in enumerate(self.transformer_blocks):
-            if idx % 2 == 1 and self.interleave_self_attention:
-                hidden_states = block(
-                    hidden_states,
-                    attention_mask=None,
-                    encoder_hidden_states=None,
-                    encoder_attention_mask=None,
-                    temb=temb,
-                )
-            else:
-                hidden_states = block(
+            #print("-------------------------------------------------------")
+            #print("OUTPUT DIR: ", output_dir)
+            #print("-------------------------------------------------------")
+            if output_dir == {}:
+                if idx % 2 == 1 and self.interleave_self_attention:
+                    hidden_states = block(
+                        hidden_states,
+                        attention_mask=None,
+                        encoder_hidden_states=None,
+                        encoder_attention_mask=None,
+                        temb=temb,
+                    )
+                else:
+                    hidden_states = block(
+                        hidden_states,
+                        attention_mask=None,
+                        encoder_hidden_states=encoder_hidden_states,
+                        encoder_attention_mask=None,
+                        temb=temb,
+                    )
+                all_hidden_states.append(hidden_states)
+
+            if output_dir != {}:
+                if idx % 2 == 1 and self.interleave_self_attention:
+                    hidden_states, attention = block(
+                        hidden_states,
+                        attention_mask=None,
+                        encoder_hidden_states=None,
+                        encoder_attention_mask=None,
+                        temb=temb,
+                        return_attention=True,
+                        )
+                else:
+                    hidden_states, attention = block(
                     hidden_states,
                     attention_mask=None,
                     encoder_hidden_states=encoder_hidden_states,
                     encoder_attention_mask=None,
                     temb=temb,
-                )
-            all_hidden_states.append(hidden_states)
+                    return_attention=True,
+                    )
+                    #print("Attention shape: ", attention.shape)
+                all_attention_maps.append(attention)
+                all_hidden_states.append(hidden_states)
+
+            
 
         # Output processing
         conditioning = temb
         shift, scale = self.proj_out_1(F.silu(conditioning)).chunk(2, dim=1)
         hidden_states = self.norm_out(hidden_states) * (1 + scale[:, None]) + shift[:, None]
+        
+        if output_dir!= None:
+            #Save the outputs This works but then we only save the last hidden states, we need to propagate these back 
+            #so that they can always be appended
+            #torch.save(all_hidden_states, str(output_dir + "hidden_states.pt"))
+            #torch.save(all_attention_maps, str(output_dir+ "attention_weights.pt"))
+            return self.proj_out_2(hidden_states), all_hidden_states, all_attention_maps
+
         if return_all_hidden_states:
             return self.proj_out_2(hidden_states), all_hidden_states
         else:

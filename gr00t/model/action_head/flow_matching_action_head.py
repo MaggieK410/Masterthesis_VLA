@@ -59,6 +59,7 @@ class CategorySpecificMLP(nn.Module):
 class MultiEmbodimentActionEncoder(nn.Module):
     def __init__(self, action_dim, hidden_size, num_embodiments):
         super().__init__()
+        print("Action dim in MultiEmbodimnetActionEncoder: ", action_dim)
         self.hidden_size = hidden_size
         self.num_embodiments = num_embodiments
 
@@ -173,7 +174,8 @@ class FlowmatchingActionHead(nn.Module):
 
         self.model = DiT(**config.diffusion_model_cfg)
         self.action_dim = config.action_dim
-        self.action_horizon = config.action_horizon
+        self.action_horizon = config.action_horizon #<- this is actually 16
+        print("Action hroizon in Flowmatching Action head: ", self.action_horizon)
         self.num_inference_timesteps = config.num_inference_timesteps
 
         self.state_encoder = CategorySpecificMLP(
@@ -302,7 +304,6 @@ class FlowmatchingActionHead(nn.Module):
 
         # Embed state.
         state_features = self.state_encoder(action_input.state, embodiment_id)
-
         # Embed noised action trajectory.
         actions = action_input.action
         noise = torch.randn(actions.shape, device=actions.device, dtype=actions.dtype)
@@ -347,8 +348,9 @@ class FlowmatchingActionHead(nn.Module):
         return BatchFeature(data=output_dict)
 
     @torch.no_grad()
-    def get_action(self, backbone_output: BatchFeature, action_input: BatchFeature) -> BatchFeature:
-
+    def get_action(self, backbone_output: BatchFeature, action_input: BatchFeature, output_dir=None) -> BatchFeature:
+        #print("++++++++++++++++++++++")
+        #print("Output dir in flow mathich action head: ", output_dir)
         backbone_output = self.process_backbone_output(backbone_output)
 
         # Get vision and language embeddings.
@@ -357,6 +359,7 @@ class FlowmatchingActionHead(nn.Module):
 
         # Embed state.
         state_features = self.state_encoder(action_input.state, embodiment_id)
+        #print("State features: ", state_features.shape)
 
         # Set initial actions as the sampled noise.
         batch_size = vl_embeds.shape[0]
@@ -392,18 +395,33 @@ class FlowmatchingActionHead(nn.Module):
             sa_embs = torch.cat((state_features, action_features), dim=1)
 
             # Run model forward.
-            model_output = self.model(
-                hidden_states=sa_embs,
-                encoder_hidden_states=vl_embs,
-                timestep=timesteps_tensor,
-            )
+            #print("------------------------------------------------")
+            #print("Run model", self.mode)
+            if output_dir != {}:
+                print("GEtting outputs")
+                model_output, hs, at = self.model(
+                    hidden_states=sa_embs,
+                    encoder_hidden_states=vl_embs,
+                    timestep=timesteps_tensor,
+                    output_dir=output_dir
+                )
+            else:
+                model_output = self.model(
+                    hidden_states=sa_embs,
+                    encoder_hidden_states=vl_embs,
+                    timestep=timesteps_tensor
+                )
+
             pred = self.action_decoder(model_output, embodiment_id)
 
             pred_velocity = pred[:, -self.action_horizon :]
 
             # Update actions using euler integration.
             actions = actions + dt * pred_velocity
-        return BatchFeature(data={"action_pred": actions})
+        if output_dir != {}:
+            return BatchFeature(data={"action_pred": actions}), hs, at
+        else:
+            return BatchFeature(data={"action_pred": actions})
 
     @property
     def device(self):

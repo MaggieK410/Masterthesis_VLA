@@ -143,7 +143,7 @@ class Gr00tPolicy(BasePolicy):
         """
         return self._modality_transform.unapply(action)
 
-    def get_action(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+    def get_action(self, observations: Dict[str, Any], output_dir=None) -> Dict[str, Any]:
         """
         Make a prediction with the model.
         Args:
@@ -169,21 +169,38 @@ class Gr00tPolicy(BasePolicy):
             observations = unsqueeze_dict_values(observations)
         # Apply transforms
         normalized_input = self.apply_transforms(observations)
-
-        normalized_action = self._get_action_from_normalized_input(normalized_input)
+        print("OUtput dir in get action: ", output_dir)
+        if output_dir == {}:
+            normalized_action = self._get_action_from_normalized_input(normalized_input, output_dir)
+        else:
+            normalized_action, hs, at = self._get_action_from_normalized_input(normalized_input, output_dir)
         unnormalized_action = self._get_unnormalized_action(normalized_action)
 
         if not is_batch:
             unnormalized_action = squeeze_dict_values(unnormalized_action)
-        return unnormalized_action
+            
+        if output_dir == {}:
+            return unnormalized_action
+        else:
+            return unnormalized_action, hs, at
 
-    def _get_action_from_normalized_input(self, normalized_input: Dict[str, Any]) -> torch.Tensor:
+    def _get_action_from_normalized_input(self, normalized_input: Dict[str, Any], output_dir=None) -> torch.Tensor:
         # Set up autocast context if needed
+        print("Output dir in normalized: ", output_dir)
         with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=COMPUTE_DTYPE):
-            model_pred = self.model.get_action(normalized_input)
-
+            if output_dir == {}:
+                print("IN HEREEEEEEEEEEEEEEEEEEEEEEE")
+                model_pred = self.model.get_action(normalized_input, output_dir) #here we allow to pass an output directory
+            else:
+                model_pred, hs, at = self.model.get_action(normalized_input, output_dir)
+        
+        
         normalized_action = model_pred["action_pred"].float()
-        return normalized_action
+        if output_dir == {}:
+            return normalized_action
+        else:
+            print("Returning hs and at")
+            return normalized_action, hs, at
 
     def _get_unnormalized_action(self, normalized_action: torch.Tensor) -> Dict[str, Any]:
         return self.unapply_transforms({"action": normalized_action.cpu()})

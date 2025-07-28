@@ -22,10 +22,12 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import matplotlib.pyplot as plt
 
 import gymnasium as gym
 #print(gym.envs.registry.keys())
 import numpy as np
+import torch
 
 # Required for robocasa environments
 import robocasa  # noqa: F401
@@ -92,15 +94,16 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
         super().__init__(host=host, port=port)
         self.env = None
 
-    def get_action(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+    def get_action(self, observations: Dict[str, Any], output_dir=None) -> Dict[str, Any]:
         """Get action from the inference server based on observations."""
+        print("output dir in simulation_get action: ", output_dir)
         # NOTE(YL)!
         # hot fix to change the video.ego_view_bg_crop_pad_res256_freq20 to video.ego_view
         if "video.ego_view_bg_crop_pad_res256_freq20" in observations:
             observations["video.ego_view"] = observations.pop(
                 "video.ego_view_bg_crop_pad_res256_freq20"
             )
-        return self.call_endpoint("get_action", observations)
+        return self.call_endpoint("get_action", observations, output_dir=output_dir)
 
     def get_modality_config(self) -> Dict[str, ModalityConfig]:
         """Get modality configuration from the inference server."""
@@ -120,14 +123,19 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
                 context="spawn",
             )
 
-    def run_simulation(self, config: SimulationConfig) -> Tuple[str, List[bool]]:
+    def run_simulation(self, config: SimulationConfig, output_dir=None) -> Tuple[str, List[bool]]:
         """Run the simulation for the specified number of episodes."""
+        #print("Output dir: ", output_dir)
+        
         start_time = time.time()
         print(
             f"Running {config.n_episodes} episodes for {config.env_name} with {config.n_envs} environments"
         )
         # Set up the environment
         self.env = self.setup_environment(config)
+        #print("All Env properties: ", vars(self.env))
+        #base=self.env
+
         # Initialize tracking variables
         episode_lengths = []
         current_rewards = [0] * config.n_envs
@@ -135,12 +143,42 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
         completed_episodes = 0
         current_successes = [False] * config.n_envs
         episode_successes = []
+        
+
         # Initial environment reset
         obs, _ = self.env.reset()
+        #print("-----------------------------------------------------------------")
+        filepath=""
+        for sub_env in self.env.envs:
+            while not isinstance(sub_env, VideoRecordingWrapper):
+                sub_env = sub_env.env
+            filepath=str(sub_env.file_path).replace(".mp4", "")
+
         # Main simulation loop
+        all_hs=[]
+        all_attentions=[]
+        all_actions=[]
         while completed_episodes < config.n_episodes:
+            filepath=""
+            for sub_env in self.env.envs:
+                while not isinstance(sub_env, VideoRecordingWrapper):
+                    sub_env = sub_env.env
+                filepath=str(sub_env.file_path).replace(".mp4", "")
+
+            
+
             # Process observations and get actions from the server
-            actions = self._get_actions_from_server(obs)
+            if output_dir != None:
+                output_dir=filepath
+                actions, hs, at = self._get_actions_from_server(obs, filepath)
+                #print("actions output: ")
+                all_hs.append(hs)
+                all_attentions.append(at)
+                all_actions.append(actions)
+                print("Actions keys: ", actions.keys())
+            else:
+                actions = self._get_actions_from_server(obs, output_dir=None)
+                print("Actions: ", len(actions))
 
             ##A little bit hacky: 
             #print("Actions: ", actions["action.left_arm"].shape)
@@ -148,8 +186,11 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
 
             # Step the environment
             next_obs, rewards, terminations, truncations, env_infos = self.env.step(actions)
+
+
             # Update episode tracking
             for env_idx in range(config.n_envs):
+                #print("Env infos: ", env_infos["success"][env_idx][0])
                 current_successes[env_idx] |= bool(env_infos["success"][env_idx][0])
                 current_rewards[env_idx] += rewards[env_idx]
                 current_lengths[env_idx] += 1
@@ -159,9 +200,32 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
                     episode_successes.append(current_successes[env_idx])
                     current_successes[env_idx] = False
                     completed_episodes += 1
+                    
+                    if output_dir != None:
+                        #print("Len attentions: ", len(all_attentions))#So we have 32 actions, which is 500 steps/16, I will keep it that way so we know the internal structure
+                        #print("Attention shape before saving: ", all_attentions[0].shape)
+                        torch.save(all_attentions, filepath+"_attentions.pt")
+                        torch.save(all_hs, filepath+"_hidden_states.pt")
+
+                        #We now basically decompress the timeline here for the arms and hands for plotting
+                        right_arm_segments=np.array([a["action.right_arm"] for a in all_actions])
+                        right_hand_segments=np.array([a["action.right_hand"] for a in all_actions])
+                        joint_names_arms=["Shoulder Pitch", "Shoulder Roll", "Shoulder Yaw", "Elbow Pitch", "Wrist Yaw", "Wrist Roll", "Wrist Pitch"]
+                        joint_names_hands=["Little Finger", "Ring Finger", "Middle Finger", "Index Finger", "Thumb Rotation", "Thumb Bending"]
+
+                        #I also make the action plots for each episode to visually track the actions with the attention layers and the hidden layers
+                        self.plot_joint_actions(right_arm_segments, joint_names_arms, right_hand_segments, joint_names_hands, filepath)
+                    
+
                     # Reset trackers for this environment
                     current_rewards[env_idx] = 0
                     current_lengths[env_idx] = 0
+
+                    all_hs=[]
+                    all_attentions=[]
+                    all_actions=[]
+
+
             obs = next_obs
         # Clean up
         self.env.reset()
@@ -175,10 +239,10 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
         ), f"Expected at least {config.n_episodes} episodes, got {len(episode_successes)}"
         return config.env_name, episode_successes
 
-    def _get_actions_from_server(self, observations: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_actions_from_server(self, observations: Dict[str, Any], output_dir=None) -> Dict[str, Any]:
         """Process observations and get actions from the inference server."""
         # Get actions from the server
-        action_dict = self.get_action(observations)
+        action_dict = self.get_action(observations, output_dir=output_dir)
         # Extract actions from the response
         if "actions" in action_dict:
             actions = action_dict["actions"]
@@ -186,6 +250,50 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
             actions = action_dict
         # Add batch dimension to actions
         return actions
+    
+    def plot_joint_actions(self, right_arm_segments, joint_names_arms, right_hand_segments, joint_names_hands, filepath):
+        total_timesteps=len(right_arm_segments) * 16
+        times=np.arange(total_timesteps)
+
+        arm_actions = np.concatenate(right_arm_segments.squeeze(), axis=0)      # shape (T,7)
+        hand_actions = np.concatenate(right_hand_segments.squeeze(), axis=0) 
+
+        print("Total Timesteps in plot: ", total_timesteps)
+        
+        fig, (ax_arm, ax_hand) = plt.subplots(
+            2, 1, figsize=(12, 8), sharex=True,
+            gridspec_kw={'height_ratios': [3, 2]}
+            )
+        
+        save_path=filepath+"_action_plots.png"
+
+        #Arm plot
+        for j, name in enumerate(joint_names_arms):
+            #print("J: ", j)
+            print(right_arm_segments.squeeze().shape)
+            ax_arm.plot(times, arm_actions[:, j], label=name)
+
+        ax_arm.set_ylabel('Arm Action Value')
+        ax_arm.set_title('Arm Joint Actions Over Time')
+        ax_arm.legend(loc='upper right', fontsize='small', ncol=2)
+        ax_arm.grid(True)
+
+        #Hand Plot:
+        for j, name in enumerate(joint_names_hands):
+            ax_hand.plot(times, hand_actions[:, j], label=name)
+        ax_hand.set_xlabel('Timestep')
+        ax_hand.set_ylabel('Hand Action Value')
+        ax_hand.set_title('Hand Joint Actions Over Time')
+        ax_hand.legend(loc='upper right', fontsize='small', ncol=2)
+        #ax_hand.grid(True)
+
+        num_segments = int(np.ceil(total_timesteps//16))
+        for k in range(1, num_segments):
+            boundary = k * 16 - 0.5
+            ax_arm.axvline(boundary, linestyle='--', color='red', alpha=0.5)
+            ax_hand.axvline(boundary, linestyle='--', color='red', alpha=0.5)
+        fig.tight_layout()
+        plt.savefig(save_path, dpi=300)
 
 
 def _create_single_env(config: SimulationConfig, idx: int) -> gym.Env:
@@ -208,6 +316,7 @@ def _create_single_env(config: SimulationConfig, idx: int) -> gym.Env:
             video_dir=Path(config.video.video_dir),
             steps_per_render=config.video.steps_per_render,
         )
+        
     # Add multi-step wrapper
     env = MultiStepWrapper(
         env,

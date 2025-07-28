@@ -62,7 +62,7 @@ class FourierGr1ArmsOnlyDataConfig(BaseDataConfig):
     ]
     language_keys = ["annotation.human.action.task_description"]
     observation_indices = [0]
-    action_indices = list(range(16))
+    action_indices = list(range(25)) #list(range(16))
 
     def modality_config(self) -> dict[str, ModalityConfig]:
         video_modality = ModalityConfig(

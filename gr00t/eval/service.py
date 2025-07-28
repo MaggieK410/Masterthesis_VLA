@@ -16,6 +16,7 @@
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, Callable, Dict
+import numpy as np
 
 import torch
 import zmq
@@ -97,6 +98,7 @@ class BaseInferenceServer:
             try:
                 message = self.socket.recv()
                 request = TorchSerializer.from_bytes(message)
+                #print("request: ", request)
 
                 # Validate token before processing request
                 if not self._validate_token(request):
@@ -106,16 +108,19 @@ class BaseInferenceServer:
                     continue
 
                 endpoint = request.get("endpoint", "get_action")
+                #print("Request: ", request)
 
                 if endpoint not in self._endpoints:
                     raise ValueError(f"Unknown endpoint: {endpoint}")
 
                 handler = self._endpoints[endpoint]
                 result = (
-                    handler.handler(request.get("data", {}))
+                    handler.handler(request.get("data", {}), request.get("output_dir", {}))
                     if handler.requires_input
                     else handler.handler()
                 )
+                #print("Result: ", result)
+
                 self.socket.send(TorchSerializer.to_bytes(result))
             except Exception as e:
                 print(f"Error in server: {e}")
@@ -123,6 +128,7 @@ class BaseInferenceServer:
 
                 print(traceback.format_exc())
                 self.socket.send(TorchSerializer.to_bytes({"error": str(e)}))
+
 
 
 class BaseInferenceClient:
@@ -160,7 +166,7 @@ class BaseInferenceClient:
         self.call_endpoint("kill", requires_input=False)
 
     def call_endpoint(
-        self, endpoint: str, data: dict | None = None, requires_input: bool = True
+        self, endpoint: str, data: dict | None = None, requires_input: bool = True, output_dir=None
     ) -> dict:
         """
         Call an endpoint on the server.
@@ -175,6 +181,10 @@ class BaseInferenceClient:
             request["data"] = data
         if self.api_token:
             request["api_token"] = self.api_token
+
+        if output_dir != None:
+            print("OUTPUT DIR in base inference cliend: ", output_dir)
+            request["output_dir"]=output_dir
 
         self.socket.send(TorchSerializer.to_bytes(request))
         message = self.socket.recv()

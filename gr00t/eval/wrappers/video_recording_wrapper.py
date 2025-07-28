@@ -126,6 +126,7 @@ class VideoRecorder:
         for k, v in self.kwargs.items():
             setattr(codec_context, k, v)
         self.start_time = start_time
+        return file_path
 
     def write_frame(self, img: np.ndarray, frame_time=None):
         if not self.is_ready():

@@ -101,6 +101,7 @@ def main(config: ArgsConfig):
         tune_visual=config.tune_visual,
         tune_projector=config.tune_projector,
         tune_diffusion_model=config.tune_diffusion_model,
+        action_horizon=25
     )
 
     model.compute_dtype = "bfloat16"
@@ -112,7 +113,7 @@ def main(config: ArgsConfig):
             rank=config.lora_rank,
             lora_alpha=config.lora_alpha,
             lora_dropout=config.lora_dropout,
-            action_head_only=not config.lora_full_model,
+            action_head_only=not config.lora_full_model
         )
 
     training_args = TrainingArguments(

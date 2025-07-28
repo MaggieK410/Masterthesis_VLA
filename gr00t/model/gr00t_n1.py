@@ -83,6 +83,8 @@ class GR00T_N1_5(PreTrainedModel):
         self.action_head = FlowmatchingActionHead(action_head_cfg)
 
         self.action_horizon = config.action_horizon
+        print("Action horizon in GR00T_N1_5: ", config.action_horizon)
+        print("Actio head cfg: ", action_head_cfg)
         self.action_dim = config.action_dim
         self.compute_dtype = config.compute_dtype
 
@@ -94,6 +96,7 @@ class GR00T_N1_5(PreTrainedModel):
         error_msg = ERROR_MSG
         if "action" in inputs:
             action = inputs["action"]
+            #print("Action shape: ", action.shape)
             type_ok = isinstance(action, torch.Tensor)
             shape_ok = (
                 len(action.shape) == 3
@@ -165,19 +168,29 @@ class GR00T_N1_5(PreTrainedModel):
         backbone_inputs, action_inputs = self.prepare_input(inputs)
         backbone_outputs = self.backbone(backbone_inputs)
         action_head_outputs = self.action_head(backbone_outputs, action_inputs)
+        #print("Action inputs shape: ", action_inputs.state.shape)
         self.validate_data(action_head_outputs, backbone_outputs, is_training=True)
         return action_head_outputs
 
     def get_action(
         self,
         inputs: dict,
+        output_dir=None
     ) -> BatchFeature:
         backbone_inputs, action_inputs = self.prepare_input(inputs)
         # Because the behavior of backbones remains the same for training and inference, we can use `forward` for backbones.
         backbone_outputs = self.backbone(backbone_inputs)
-        action_head_outputs = self.action_head.get_action(backbone_outputs, action_inputs)
-        self.validate_data(action_head_outputs, backbone_outputs, is_training=False)
-        return action_head_outputs
+        if output_dir == {}:
+            action_head_outputs = self.action_head.get_action(backbone_outputs, action_inputs, output_dir)
+            self.validate_data(action_head_outputs, backbone_outputs, is_training=False)
+            
+            return action_head_outputs
+        else:
+            action_head_outputs, hs, at = self.action_head.get_action(backbone_outputs, action_inputs, output_dir)
+            self.validate_data(action_head_outputs, backbone_outputs, is_training=False)
+            #print("Attention map in gr00t: ", at[0].shape)
+            return action_head_outputs, hs, at
+        
 
     def prepare_input(self, inputs) -> Tuple[BatchFeature, BatchFeature]:
         self.validate_inputs(inputs)

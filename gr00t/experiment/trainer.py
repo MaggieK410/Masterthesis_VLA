@@ -29,6 +29,12 @@ from transformers.trainer import (
     is_sagemaker_mp_enabled,
 )
 
+#Added this so I can resume
+import numpy as np
+torch.serialization.add_safe_globals([
+    np.core.multiarray._reconstruct
+])
+
 
 class BaseSampler(Sampler):
     """Sampler for dataset, which enables `set_epoch` for Dataset.
@@ -75,6 +81,13 @@ class DualBrainTrainer(transformers.Trainer):
         outputs = model(inputs)
         loss = outputs["loss"]
         return (loss, outputs) if return_outputs else loss
+        
+    def _load_rng_state(self, checkpoint_path):
+        #I added tis so I can resume from checkpoint
+        rng_file = os.path.join(checkpoint_path, "rng_state.pth")
+        if os.path.isfile(rng_file):
+            checkpoint_rng_state = torch.load(rng_file, weights_only=False)
+            self._set_rng_state(checkpoint_rng_state)
 
     def create_optimizer(self):
         """
