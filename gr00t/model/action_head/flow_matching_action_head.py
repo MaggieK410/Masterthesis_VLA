@@ -316,7 +316,7 @@ class FlowmatchingActionHead(nn.Module):
         # Convert (continuous) t -> discrete if needed
         t_discretized = (t[:, 0, 0] * self.num_timestep_buckets).long()
         action_features = self.action_encoder(noisy_trajectory, t_discretized, embodiment_id)
-
+        print("Action feautures length: ", action_features.shape)
         # Maybe add position embedding.
         if self.config.add_pos_embed:
             pos_ids = torch.arange(action_features.shape[1], dtype=torch.long, device=device)
@@ -335,7 +335,9 @@ class FlowmatchingActionHead(nn.Module):
             timestep=t_discretized,
             return_all_hidden_states=False,  # NOTE (YL): not using flare now
         )
+        print("Model output shape: ", model_output.shape)
         pred = self.action_decoder(model_output, embodiment_id)
+        
         pred_actions = pred[:, -actions.shape[1] :]
 
         # Slice out only the action portion of pred and target.
@@ -363,6 +365,7 @@ class FlowmatchingActionHead(nn.Module):
 
         # Set initial actions as the sampled noise.
         batch_size = vl_embeds.shape[0]
+        print("BAtch size: ", batch_size)
         device = vl_embeds.device
         actions = torch.randn(
             size=(batch_size, self.config.action_horizon, self.config.action_dim),
@@ -393,12 +396,14 @@ class FlowmatchingActionHead(nn.Module):
 
             # Join vision, language, state and action embedding along sequence dimension.
             sa_embs = torch.cat((state_features, action_features), dim=1)
-
+            print("Sa embs size: ", sa_embs.shape)
+            print("State features size: ", state_features.shape)
+            print("Action Features shape ", action_features.shape)
             # Run model forward.
             #print("------------------------------------------------")
             #print("Run model", self.mode)
             if output_dir != {}:
-                print("GEtting outputs")
+                #print("GEtting outputs")
                 model_output, hs, at = self.model(
                     hidden_states=sa_embs,
                     encoder_hidden_states=vl_embs,
@@ -413,6 +418,7 @@ class FlowmatchingActionHead(nn.Module):
                 )
 
             pred = self.action_decoder(model_output, embodiment_id)
+            #print("Pred shape: ", pred.shape) model output is 1, 17, 32
 
             pred_velocity = pred[:, -self.action_horizon :]
 

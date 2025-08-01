@@ -83,8 +83,8 @@ class GR00T_N1_5(PreTrainedModel):
         self.action_head = FlowmatchingActionHead(action_head_cfg)
 
         self.action_horizon = config.action_horizon
-        print("Action horizon in GR00T_N1_5: ", config.action_horizon)
-        print("Actio head cfg: ", action_head_cfg)
+        #print("Action horizon in GR00T_N1_5: ", config.action_horizon)
+        #print("Actio head cfg: ", action_head_cfg)
         self.action_dim = config.action_dim
         self.compute_dtype = config.compute_dtype
 

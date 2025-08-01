@@ -294,6 +294,7 @@ class DiT(ModelMixin, ConfigMixin):
 
         # Process through transformer blocks - single pass through the blocks
         hidden_states = hidden_states.contiguous()
+        print("Hidden states in DiT: ", hidden_states.shape)
         encoder_hidden_states = encoder_hidden_states.contiguous()
 
         all_hidden_states = [hidden_states]

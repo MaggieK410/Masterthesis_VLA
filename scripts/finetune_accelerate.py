@@ -101,7 +101,7 @@ def main(config: ArgsConfig):
         tune_visual=config.tune_visual,
         tune_projector=config.tune_projector,
         tune_diffusion_model=config.tune_diffusion_model,
-        action_horizon=25
+        #action_horizon=25
     )
 
     model.compute_dtype = "bfloat16"

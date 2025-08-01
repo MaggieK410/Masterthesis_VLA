@@ -172,13 +172,21 @@ class SimulationInferenceClient(BaseInferenceClient, BasePolicy):
                 output_dir=filepath
                 actions, hs, at = self._get_actions_from_server(obs, filepath)
                 #print("actions output: ")
+                
+                #print("Hs shape: ", len(hs)) #17
+                #print("Hs shape: ", len(hs[0])) #1
+                #print("Hs shape: ", len(hs[0][0])) #17
+
+                #print("Actions: ", len(actions))
+
+                #print("\n")
                 all_hs.append(hs)
                 all_attentions.append(at)
                 all_actions.append(actions)
-                print("Actions keys: ", actions.keys())
+                #print("Actions keys: ", actions.keys())
             else:
                 actions = self._get_actions_from_server(obs, output_dir=None)
-                print("Actions: ", len(actions))
+                #print("Actions: ", len(actions))
 
             ##A little bit hacky: 
             #print("Actions: ", actions["action.left_arm"].shape)
