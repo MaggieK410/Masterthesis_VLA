@@ -316,7 +316,7 @@ class FlowmatchingActionHead(nn.Module):
         # Convert (continuous) t -> discrete if needed
         t_discretized = (t[:, 0, 0] * self.num_timestep_buckets).long()
         action_features = self.action_encoder(noisy_trajectory, t_discretized, embodiment_id)
-        print("Action feautures length: ", action_features.shape)
+        #print("Action feautures length: ", action_features.shape)
         # Maybe add position embedding.
         if self.config.add_pos_embed:
             pos_ids = torch.arange(action_features.shape[1], dtype=torch.long, device=device)
@@ -335,7 +335,7 @@ class FlowmatchingActionHead(nn.Module):
             timestep=t_discretized,
             return_all_hidden_states=False,  # NOTE (YL): not using flare now
         )
-        print("Model output shape: ", model_output.shape)
+        #print("Model output shape: ", model_output.shape)
         pred = self.action_decoder(model_output, embodiment_id)
         
         pred_actions = pred[:, -actions.shape[1] :]
@@ -396,9 +396,9 @@ class FlowmatchingActionHead(nn.Module):
 
             # Join vision, language, state and action embedding along sequence dimension.
             sa_embs = torch.cat((state_features, action_features), dim=1)
-            print("Sa embs size: ", sa_embs.shape)
-            print("State features size: ", state_features.shape)
-            print("Action Features shape ", action_features.shape)
+            #print("Sa embs size: ", sa_embs.shape)
+            #print("State features size: ", state_features.shape)
+            #print("Action Features shape ", action_features.shape)
             # Run model forward.
             #print("------------------------------------------------")
             #print("Run model", self.mode)
