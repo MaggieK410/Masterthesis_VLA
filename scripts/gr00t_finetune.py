@@ -83,7 +83,7 @@ class ArgsConfig:
     learning_rate: float = 1e-4
     """Learning rate for training."""
 
-    weight_decay: float = 1e-7 #original: 1e-6
+    weight_decay: float = 1e-6 #original: 1e-6
     """Weight decay for AdamW optimizer."""
 
     warmup_ratio: float = 0.05
