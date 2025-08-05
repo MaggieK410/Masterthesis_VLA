@@ -42,12 +42,12 @@ class ArgsConfig:
     save_steps: int = 1000
     base_model_path: str = "nvidia/GR00T-N1.5-3B"
     tune_llm: bool = False
-    tune_visual: bool = True
+    tune_visual: bool = False #Actually set to true for all my experiments, this is only false for small ball, retrained on old data, bs 16!!!
     tune_projector: bool = True
     tune_diffusion_model: bool = True
     resume: bool = False
     learning_rate: float = 1e-4
-    weight_decay: float = 1e-5
+    weight_decay: float = 1e-5 #1e-5
     warmup_ratio: float = 0.05
     lora_rank: int = 0
     lora_alpha: int = 16
