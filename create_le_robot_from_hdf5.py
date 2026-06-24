@@ -153,7 +153,7 @@ def main(args):
 	if args.episode_json:
 
 		print("saving episode info at: ", args.output_folder.replace("\\data\\chunk-000\\", "")+"\\meta\\episodes.jsonl")
-		with open(args.output_folder.replace("\\data\\chunk-000\\", "")+"\\meta\\episodes.jsonl", "w") as f:
+		with open(args.output_folder.replace("\\data\\chunk-000\\", "")+"\\meta\\episodes.jsonl", "w+") as f:
 			for item in episode_infos:
 				f.write(json.dumps(item) + "\n")
 if __name__=="__main__":
